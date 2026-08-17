@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spend Estimator</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <main class="receipt">
+    <header class="receipt__header">
+      <p class="receipt__eyebrow">Customer Spending Model</p>
+      <h1 class="receipt__title">Monthly Spend Estimator</h1>
+      <p class="receipt__sub">Enter a customer's visit &amp; purchase history to estimate their average monthly spend.</p>
+    </header>
+
+    <div class="receipt__perf" aria-hidden="true"></div>
+
+    <form id="predict-form" class="fields">
+      <label class="field">
+        <span>No. of visits</span>
+        <input type="number" name="no_of_visits" min="0" step="1" required value="6" />
+      </label>
+      <label class="field">
+        <span>Apparel items</span>
+        <input type="number" name="apparel_items" min="0" step="1" required value="1" />
+      </label>
+      <label class="field">
+        <span>FnV items</span>
+        <input type="number" name="fnv_items" min="0" step="1" required value="4" />
+      </label>
+      <label class="field">
+        <span>Staples items</span>
+        <input type="number" name="staples_items" min="0" step="1" required value="5" />
+      </label>
+
+      <button type="submit" class="run-btn">Estimate spend</button>
+    </form>
+
+    <div class="receipt__perf" aria-hidden="true"></div>
+
+    <section id="result" class="result" hidden>
+      <p class="result__label">Predicted Avg. Monthly Spend</p>
+      <p class="result__amount"><span>₹</span><span id="result-value">0</span></p>
+      <p class="result__stamp" id="result-stamp">ESTIMATE</p>
+    </section>
+
+    <p id="error" class="error" hidden></p>
+
+    <footer class="receipt__footer">
+      <p id="model-meta">model: —</p>
+    </footer>
+  </main>
+
+  <script>
+    const form = document.getElementById('predict-form');
+    const resultBox = document.getElementById('result');
+    const resultValue = document.getElementById('result-value');
+    const errorBox = document.getElementById('error');
+    const modelMeta = document.getElementById('model-meta');
+
+    fetch('/info')
+      .then(r => r.json())
+      .then(info => {
+        const m = info.metrics;
+        if (m) {
+          const modelName = m.best_model ? m.best_model : 'model';
+          const r2 = (typeof m.r2 === 'number') ? m.r2.toFixed(2) : '—';
+          modelMeta.textContent = `model: ${modelName}  ·  R² ${r2}  ·  ${m.samples} training rows`;
+        }
+      })
+      .catch(() => { modelMeta.textContent = ''; });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorBox.hidden = true;
+      resultBox.hidden = true;
+
+      const payload = Object.fromEntries(new FormData(form).entries());
+
+      try {
+        const res = await fetch('/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          errorBox.textContent = data.error || 'Prediction failed.';
+          errorBox.hidden = false;
+          return;
+        }
+
+        const amount = Math.round(data.prediction).toLocaleString('en-IN');
+        resultValue.textContent = amount;
+        resultBox.hidden = false;
+      } catch (err) {
+        errorBox.textContent = 'Could not reach the prediction server.';
+        errorBox.hidden = false;
+      }
+    });
+  </script>
+</body>
+</html>
